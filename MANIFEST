@@ -3,7 +3,6 @@ MANIFEST
 Makefile.PL
 README
 META.yml
-META.bk.yml
 lib/Net/SNMP/Util.pm
 lib/Net/SNMP/Util/OID.pm
 lib/Net/SNMP/Util/TC.pm

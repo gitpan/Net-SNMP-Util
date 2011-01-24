@@ -2,7 +2,7 @@
 # =============================================================================
 # snmpbulk.pl - Command to get MIB with SNMP GetBulkRequest via Net::SNMP::Util
 # -----------------------------------------------------------------------------
-$main::VERSION = '1.00';
+$main::VERSION = '1.01';
 # -----------------------------------------------------------------------------
 
 =head1 NAME
@@ -94,6 +94,7 @@ my ( $result, $error );
 
 # ---------- output result ----------
 print Dumper($result);
+warn "[ERROR] $error\n" if $error;
 if ( $opt{f} ){
     eval { lock_nstore $result, $opt{f}; };
     warn "[ERROR] Storable error; $@\n" if $@;

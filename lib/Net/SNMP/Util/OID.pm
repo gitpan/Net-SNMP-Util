@@ -1,7 +1,7 @@
 # =============================================================================
 package Net::SNMP::Util::OID;
 # -----------------------------------------------------------------------------
-$Net::SNMP::Util::OID::VERSION = '1.00';
+$Net::SNMP::Util::OID::VERSION = '1.01';
 # -----------------------------------------------------------------------------
 use warnings;
 use strict;
@@ -603,7 +603,7 @@ t.onodera, C<< <cpan :: garakuta.net> >>
 
 =head1 SEE ALSO
 
-L<Net::SNMP::Util>
+L<Net::SNMP::Util>, L<Net::SNMP::Util::TC>
 
 =head1 LICENSE AND COPYRIGHT
 

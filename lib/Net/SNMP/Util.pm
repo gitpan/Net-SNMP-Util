@@ -1,7 +1,7 @@
 # =============================================================================
 package Net::SNMP::Util;
 # -----------------------------------------------------------------------------
-$Net::SNMP::Util::VERSION = '1.00';
+$Net::SNMP::Util::VERSION = '1.01';
 # -----------------------------------------------------------------------------
 
 =head1 NAME
@@ -12,9 +12,10 @@ Net::SNMP::Util - Utility functions for Net::SNMP
 
     @hosts = qw( host1 host2 host3 );
     %oids  = (
-        'ifData => [ '1.3.6.1.2.1.2.2.1.2',     # ifDescr
-                     '1.3.6.1.2.1.2.2.1.3' ],   # ifType
-        'someMib' => '1.3.6.1.4.1.99999.12.3'
+        'ifType'  =>   '1.3.6.1.2.1.2.2.1.3',
+        'ifXData  => [ '1.3.6.1.2.1.31.1.1.1.1',    # ifName
+                       '1.3.6.1.2.1.31.1.1.1.15' ], # ifHighSpeed
+        'someMib' =>   '1.3.6.1.4.1.99999.12.3'
     );
     %snmpparams = (
         -version   => 2,
@@ -31,7 +32,7 @@ Net::SNMP::Util - Utility functions for Net::SNMP
     );
     die "[ERROR] $error\n" unless defined $result;
 
-    # NonBlocking One
+    # Non-blocking One
     use Net::SNMP::Util qw(:para);
 
     ($result,$error) = snmpparawalk(
@@ -41,58 +42,56 @@ Net::SNMP::Util - Utility functions for Net::SNMP
     );
     die "[ERROR] $error\n" unless defined $result;
 
-    # result
-    foreach $h ( @hosts ){
-        foreach $index ( sort keys %{$result->{$h}{ifData}[0]} ){
-            printf "$h - $index - %s (%d)\n",
-                $result->{$h}{ifData}[0]{$index},   # ifDescr
-                $result->{$h}{ifData}[1]{$index};   # ifType
-        }
-        while ( ($index, $val) = each %{$result->{$h}{someMib}} ){
-            print "$h - .1.3.6.1.4.1.99999.12.3.$index - $val\n";
+    # output result sample
+    foreach $host ( @hosts ){
+        foreach $index ( sort keys %{$result->{$host}{ifType}} ){
+            printf "$host - $index - type:%d - %s (%d kbps)\n",
+                $result->{$host}{ifType}{$index},
+                $result->{$host}{ifXData}[0]{$index},   # ifName
+                $result->{$host}{ifXData}[1]{$index};   # ifHighSpeed
         }
     }
 
 
 =head1 DESCRIPTION
 
-This module, C<Net::SNMP::Util>, gives you functions of SNMP B<getting operation>
-interfaces using C<Net::SNMP>.
+This module, C<Net::SNMP::Util>, gives you functions of SNMP getting operation
+interfaces using L<Net::SNMP> communicating with B<multiple hosts> and B<multi-OIDs>.
 
 
 =head1 OVERVIEW
 
 Functions of C<Net::SNMP::Util> are grouped by type whether using B<Blocking mode>
-or B<NonBlocking mode>.
+or B<Non-blocking mode>.
 
 
 =head2 Blocking Functions
 
 Blocking functions, C<snmpget()>, C<snmpwalk()> and C<snmpbulk()>, are exported
 by defalut. These functions use C<Net::SNMP> blocking object and exchange SNMP
-messages serially by specified hosts ordering.
+messages serially.
 
 
-=head2 NonBlocking Functions
+=head2 Non-blocking Functions
 
-Using tag C<":para"> or C<":parallel">, NonBlocking functions which use
-C<Net::SNMP> B<non-blocking object> are exported. These functions exchange SNMP
-messages to hosts and treat responsed MIB values in order of message receiving
-while the loop. These functions will apparently behave in parallel, so they have
-"para" in its own names.
+Using tag C<":para"> or C<":parallel">, Non-Blocking functions which use
+C<Net::SNMP> B<Non-blocking object> are exported. These functions can exchange
+SNMP messages to multiple hosts and treat response MIB values in order of
+message receiving while the loop. These functions will apparently behave in
+parallel, so they have "para" in its own names.
 
 
-=head2 Parameters
+=head2 Arguments
 
-The way of passing parameters is unified whether function is NonBlocking or
+The way of passing arguments is unified whether function is Non-blocking or
 Blocking.
-Basically pass parametes with name and following value like hash pair below;
+Basically pass arguments with name and following value like hash pair below;
 
     $r = snmpwalk( hosts => $hostsval,
                    oids  => $oidval,
                    snmp  => $snmpval );
 
-Original C<Net::SNMP> functions' parameters are able to be passed.
+Mostly original C<Net::SNMP> functions' arguments are able to be passed.
 
     $r = snmpparabulk(
         hosts => $hostsval, oids => $oidval, snmp => $snmpval
@@ -101,136 +100,140 @@ Original C<Net::SNMP> functions' parameters are able to be passed.
     );
 
 But some original parameter, C<-callback>, C<-nonrepeaters> and C<-varbindlist>
-are not supported by reason of algorithm.
+are not supported by reason of a algorithm.
 
-=over
 
-=item Parameter "hosts"
+=head3 Argument "hosts"
 
-Specify hosts list by parameter C<"hosts"> with following a hash or array
-reference or hostname. Following a hash reference, it is possible to use
-prepared C<Net::SNMP> object like below;
+By argument C<"hosts">, specify hosts to communicate. This takes a hash or
+array reference or hostname.
+
+When only hash reference using, it is possible to use prepared C<Net::SNMP>
+object like below;
 
     # Using hash reference with prepared Net::SNMP object
     $session1 = Net::SNMP->session( -hostname=>"www.freshes.org", ... );
     $session2 = Net::SNMP->session( -hostname=>"192.168.10.8",    ... );
     $r = snmpwalk( hosts => {
                         "peach" => $session1,
-                        "berry" => $session2, ...
+                        "berry" => $session2
                    }, ...
     );
 
-Note that host names of keys above are not set for target hosts to
-communicate with SNMP but just used to classfy result.
+In this way, keys of hash are not specifying target hosts but just used to
+classfy result.
 
-Except the way of using prepered object above, temporary C<Net::SNMP>
-session object will be made, used and deleted internally and automaticaly.
-
-Hash reference case as following, values will be passed to
-C<Net::SNMP-E<gt>session()> as its parameters.
+Except such way of using prepered object like above, a temporary C<Net::SNMP>
+session object will be made, used and deleted internally and automaticaly. See
+the way below, this example will make temporary session with hash parameters of
+C<Net::SNMP-E<gt>session()>;
 
     # Using hash reference with parameters
     $r = snmpwalk( hosts => {
                         "pine" => {
-                            -hostname  => "192.168.20.8",
-                            -version   => 2,
+                            -hostname  => "192.168.10.9",
                         },
+                        "passion" => {
+                            -hostname  => "exchanger.local",
+                            -port      => 10161,
+                        }
                    }, ...
     );
 
-More parameter C<"snmp"> paired with hash reference, it regards as common
-parameters for each temporary session making.
+More hash argument C<"snmp"> are given, it will be used as common parameters
+for each temporary session making. This argument C<"snmp"> hash is not only
+for hash but also for specifying by array rererence or hostname string.
 
-    # Using hash reference with parameters
+    # hash "snmp" using examples
     $r = snmpwalk( hosts => {
-                        "peach" => { -hostname  => "www.freshes.org" },
-                        "berry" => { -hostname  => "192.168.10.8"    },
-                        "pine"  => { -hostname  => "192.168.20.8",
-                                     -version   => 2,                },
+                        "peach"   => { -hostname  => "www.freshes.org" },
+                        "berry"   => { -hostname  => "192.168.10.8"    },
+                        "pine"    => { -hostname  => "192.168.20.8",   },
+                        "passion" => { -hostname  => "exchanger.local",
+                                       -port      => 10161,            },
                    },
-                   snmp  => {        -community => "secchan",
-                                     -timeout   => 10
-                   },
+                   snmp  => { -community => "4leaf-clover",
+                              -timeout   => 10,
+                              -retries   => 2,
+                   }, ...
     );
 
-In this hash case, host names of keys (e.g. "www1", "www2" and "www3" above)
-are also just used for classfying.
-
-Array reference using and host name specifying are here. Use parameter
-C<"snmp"> as case above for common parameter specifying.
-
-    # Using array reference
-    $r = snmpwalk( hosts => [ "www.freshes.org", "192.168.10.8", "192.168.20.8" ],
-                   # hosts => "www.freshes.org", # check just only this one
-                   snmp  => { -version   => 2,
-                              -community => "myprecures",
-                              -timeout   => 10
-                   },
+    # Using array reference or string
+    $r5 = snmpwalk( hosts => [ "dream","rouge","lemonade","mint","aqua" ],
+                    snmp  => { -version   => 1,
+                               -community => "yes5",
+                    }, ...
+    );
+    $r6 = snmpwalk( hosts => "milkyrose",
+                    snmp  => { -version   => 2,
+                               -community => "yes5gogo",
+                    }, ...
     );
 
-Note that, against hashref case, in the way above, specified hosts or IP address
-are used for SNMP communication and also used result classfying.
+Note that values of arguments C<"host"> in array reference case or hostname
+string are used as values of C<-hostname> parameters for C<Net::SNMP>, and
+at the same, time used as classfying key of result.
 
 
-=item Parameter "oids"
+=head3 Arguments "oids"
 
-Specify OIDs by parameter C<"oids"> with following hash reference.
-
-This hash's key must be a convinient MIB name to classfy. Values must be a
-array reference listing OIDs, or OID string.
+Specify OIDs to investigate by hash reference argument named C<"oids">. Keys
+of this hash will be used as just classfying of result. Values must be an
+array reference listing OIDs, or singular OID string. And this hash allows
+that these two types are mixed into it.
 
     $r = snmpwalk( hosts => \@hosts,
                    oids  => {
-                        "system" => "1.3.6.1.2.1.1",
+                        "system" =>   "1.3.6.1.2.1.1",
                         "ifInfo" => [ "1.3.6.1.2.1.2.2.1.3",        # ifType
-                                      "1.3.6.1.2.1.31.1.1.1.1",     # ifName
-                        ]
-                }, ...
+                                      "1.3.6.1.2.1.31.1.1.1.1", ]   # ifName
+                   }, ...
     );
 
-Each value of this C<"oids"> hash will be a set of B<Var Bindings>. So
-giving several OIDs with array reference, Var Bindings will contains
-all of OIDs in the array.
+Each value of this C<"oids"> hash will make one B<Var Bindings>. So singular
+OID value makes Var Bindings contains one OID, and multiple OID specified by
+array reference makes one contains several OIDs.
+
+It is allowed to specify arguments C<"oids"> as array reference. In this case,
+result content will not be classfied by keys of OID name but keys of
+suboids. See section of "Return Values" below.
 
 
-=item Parameter "snmp"
+=head3 Argument "snmp"
 
-If parameter C<"hosts"> specified, parameter "snmp" will behave common
-parameter to C<Net::SNMP-E<gt>session()> mentioned above.
+If argument C<"hosts"> is specified, hash argument C<"snmp"> will mean common
+parameters to C<Net::SNMP-E<gt>session()> mentioned above.
 
 Well, it is possible to omit parameter C<"host">. In this case, value of
-C<"snmp"> will be used to specify the target.
-Same as "hosts", prepared C<Net::SNMP> session object and giving a hash
-reference are allowed.
+C<"snmp"> will be used to specify the target. Same as argument "hosts",
+giving prepared C<Net::SNMP> session object is allowed.
 
     # Prepared session
     $session = Net::SNMP->session( -hostname => "blossom", ... );
     $r = snmpwalk(  snmp => $session,
-                    oid  => ... ,
+                    oids => \%oids,
                     ...
     );
-
     # Temporary session
-    $r = snmpwalk( snmp => {
-                      -hostname  => "marine",
-                      -community => "heartcatchers",
+    $r = snmpwalk( snmp => { -hostname  => "marine",
+                             -community => "heartcatchers",
                    },
-                   oid => ... ,
+                   oids => \%oids,
                    ...
     );
 
 
-=item Forbidding for parameter specifying
+=head3 Forbiddings
 
-It will be an error below;
+These case below causes an error;
 
 =over
 
 =item *
 
-Parameter C<"snmp"> with prepared C<Net::SNMP> object is specified at the same
-time C<"hosts"> specified.
-Chomp parameter C<"hosts"> or make parameter C<"snmp"> hash reference.
+Argument C<"snmp"> with prepared C<Net::SNMP> object and C<"hosts"> are
+specified at the same time.
+Chomp C<"hosts"> or let parameter C<"snmp"> a hash reference.
 
     # NG
     $session = Net::SNMP->session( ... );
@@ -240,15 +243,13 @@ Chomp parameter C<"hosts"> or make parameter C<"snmp"> hash reference.
 
 =item *
 
-NonBlocking prepared C<Net::SNMP> object are given as C<"hosts"> or C<"snmp">
+Non-blocking prepared C<Net::SNMP> object are given as C<"hosts"> or C<"snmp">
 value to Blocking functions.
 
 =item *
 
 Blocking prepared C<Net::SNMP> object are given as C<"hosts"> or C<"snmp">
-value  to NonBlocking functions.
-
-=back
+value  to Non-blocking functions.
 
 =back
 
@@ -257,151 +258,162 @@ value  to NonBlocking functions.
 
 =head3 Errors
 
-In list context, result value and errors message string will be return. In
-scalar, only result value will be return. In both case, critical errors will
-make result value B<undef> and make errors message string.
+In list context, a hash reference result value and errors string will be
+returned. In scalar, only result value will be returned. In both case, critical
+errors will make result value B<undef> and make errors string.
 
-If several host checking and error occured while communicating with some hosts,
-error messages string will be chained with these messages. For checking errors
-by host individually or in scalar context, use functions C<get_errhash()>. This
-function will return a hash reference which contains messages for each hosts.
+If several hosts checking and some errors occured while communicating, each
+error messages will be chained to errors string. For checking errors by host
+individually or in scalar context, use functions C<get_errhash()>. This function
+will return a hash reference which contains error messages for each hosts.
 
 =head3 Gained MIB Values
 
-In success, gained MIB value will be packed into a hash with key as specified
-MIB name.
+In success, gained MIB value will be packed into a hash and its reference will
+be returned.
 
-For example, C<snmpget()> and C<snmpparaget()> operations;
+For example, case of C<snmpget()> and C<snmpparaget()> operations;
 
-    snmpget( oids => {
-        sysDescr  => "1.3.6.1.2.1.1.1.0",
-        sysUpTime => "1.3.6.1.2.1.1.3.0",   }
-    ... );
+    snmpget( oids => { sysContact =>   "1.3.6.1.2.1.1.4.0",
+                       sysInfo    => [ "1.3.6.1.2.1.1.5.0",    # sysName
+                                       "1.3.6.1.2.1.1.6.0"  ], # sysLocation
+             }, ...
+    );
 
 yeilds;
 
     {
-        sysDescr  => "Description...",
-        sysUpTime => "24 days, 23:55:24.00",
+        sysContact => "Cure Flower <k.hanasaki@heartcatchers.com>",
+        sysInfo    => [ "palace", "some place, some world" ],
     }
 
-And other functions, value will be a more hash which contains pairs of key as
-sub OID and its values.
+Other functions, value will be a more hash which contains pairs of key as
+sub OID and its values. 
 For example;
 
-    snmpwalk( oids => {
-        ifType => "1.3.6.1.2.1.2.2.1.3",
-        ifName => "1.3.6.1.2.1.31.1.1.1.1", }
-    ... );
+    snmpwalk( oids => { "system" =>   "1.3.6.1.2.1.1",
+                        "ifInfo" => [ "1.3.6.1.2.1.2.2.1.3",        # ifType
+                                      "1.3.6.1.2.1.31.1.1.1.1", ]   # ifName
+              }, ...
+    );
 
 yeilds;
 
     {
-        "ifType" => {
-            "1"         => 62,      # 1.3.6.1.2.1.2.2.1.3.1
-            "10101"     => 62,      # 1.3.6.1.2.1.2.2.1.3.10101
-            ...
+        "system"  => {
+            "1.0" => "Testing system the fighters are strong enough",
+            "2.0" => "1.3.6.1.4.1.99999.1",
+            ... ,
         },
-        "ifName" => {
-            # Sub OID
-            "1"         => "mgmt",  # 1.3.6.1.2.1.31.1.1.1.1.1
-            "10101"     => "1/1",   # 1.3.6.1.2.1.31.1.1.1.1.10101
-            ...
+        "ifInfo" => [
+            {
+                "1"         => 62,          # 1.3.6.1.2.1.2.2.1.3.1
+                "10101"     => 62,          # 1.3.6.1.2.1.2.2.1.3.10101
+                ...
+            },
+            {
+                "1"         => "mgmt",      # 1.3.6.1.2.1.31.1.1.1.1.1
+                "10101"     => "1/1",       # 1.3.6.1.2.1.31.1.1.1.1.10101
+                ...
+            }
+        ]
+    }
+
+As stated above, when OIDs are specified in an array, values also will be
+contained in an array.
+
+If parameter C<"snmp"> decides target host without C<"hosts">, result data
+will be the same as above examples yields. If not so, parameter C<"hosts">
+is specified, result data of each host will be contained to parentally
+hash which key will be identified by hostname.
+For example;
+
+    $r1 = snmpget(
+        hosts => [ "bloom", "eaglet" ],
+        oids => {
+                system => [ "1.3.6.1.2.1.1.1.0", "1.3.6.1.2.1.1.3.0" ],
+        }, ...
+    );
+
+    $r2 = snmpwalk(
+        hosts => {
+            "kaoru"   => { -hostname => '192.168.11.10', ... },
+            "michiru" => { -hostname => '192.168.12.10', ... },
+        },
+        oids => { "system" =>   "1.3.6.1.2.1.1",
+                  "ifInfo" => [ "1.3.6.1.2.1.2.2.1.3",        # ifType
+                                "1.3.6.1.2.1.31.1.1.1.1", ]   # ifName
+        }, ...
+    );
+
+returns hashref;
+
+    # $r1
+    {
+        "bloom"  => {                       # hostname
+            "system" => [ ...VALUES... ]
+        },
+        "eaglet" => {                       # hostname
+            "system" => [ ...VALUES... ]
         }
     }
 
-If specifying OID with array reference, values will be contained in an array.
-For example;
-
-    snmpget( oids => {
-        system => [ "1.3.6.1.2.1.1.1.0", "1.3.6.1.2.1.1.3.0" ]
-    }, ... );
-
-yeilds;
-
+    # $r2
     {
-        'system' => [
-            '8860 System Panel 8.1.0.1.4635 (MIB = 8.1.8.1)',
-            '25 days, 00:41:40.00'
-        ]
-    }
-
-and;
-
-    snmpwalk( oids => {
-        ifData => [ "1.3.6.1.2.1.2.2.1.3", "1.3.6.1.2.1.31.1.1.1.1" ]
-    }, ... );
-
-yeilds;
-
-    {
-        'ifData' => [
+        "system"  => { 
+            "1.0" => "...", "2.0" => "...", ... 
+        },
+        "ifInfo" => [
             {
-                "1"         => 62,      # 1.3.6.1.2.1.2.2.1.3.1
-                "10101"     => 62,      # 1.3.6.1.2.1.2.2.1.3.10101
+                "1"         => 62,          # 1.3.6.1.2.1.2.2.1.3.1
+                "10101"     => 62,          # 1.3.6.1.2.1.2.2.1.3.10101
                 ...
             },
             {
-                "1"         => "mgmt",  # 1.3.6.1.2.1.31.1.1.1.1.1
-                "10101"     => "1/1",   # 1.3.6.1.2.1.31.1.1.1.1.10101
+                "1"         => "mgmt",      # 1.3.6.1.2.1.31.1.1.1.1.1
+                "10101"     => "1/1",       # 1.3.6.1.2.1.31.1.1.1.1.10101
                 ...
             }
         ]
     }
 
-If parameter C<"snmp"> decides target host without C<"hosts">, result data
-will be the same as above.
-If not so, parameter C<"hosts"> is specified, result data for each host will
-be contained to parentally hash which member will be identified by host name.
+If OIDs specifying by C<"oids"> are not a hash but an array reference, values
+of gained data will be not hash but array.
+For example,
 
-e.g.;
+    snmpget( oids => [ "1.3.6.1.2.1.1.5.0",     # sysName
+                       "1.3.6.1.2.1.1.6.0"  ],  # sysLocation
+             }, ...
+    );
 
-    use Data::Dumper;
-    print Dumper(scalar(
-        snmpget(
-            hosts => [ "bloom", "eaglet" ],
-            oids => {
-                system => [ "1.3.6.1.2.1.1.1.0", "1.3.6.1.2.1.1.3.0" ]
-            }, ...
-        )
-    ));
+yeilds;
 
-will print;
-
-    $VAR1 = {
-            "bloom"  => {
-                    "system" => [
-                            ...VALUES...
-                    ]
-            },
-            "eaglet" => {
-                    "system" => [
-                            ...VALUES...
-                    ]
-            }
-    };
+    [ "takocafe",                               # string of sysName
+      "Wakabadai-park, Tokyo" ],                # string of sysLocation
 
 
 =head2 Callback function
 
 Apart from original C<-callback> option of functions of C<Net::SNMP>,
-C<Net::SNMP::Util> functions provides another callback logic.
-Common option, C<-mycallback>, is that. This option is possible to be used
-whether NonBlocking or Blocking.
+functions of C<Net::SNMP::Util> provides another callback logic, by specifying
+common option, C<-mycallback>. This option is possible to be used whether
+Non-blocking or Blocking.
 
-This callback function will be called when each MIB value recieving. At
-calling, session object, host name, key name and reference to array of values
-are passed to the function.
+This callback function will be called when each MIB value recieving with
+passing arguments; session object, host name, key name and reference to array
+of values.
 
 For example, C<snmpget()> and C<snmpparaget()> operations, array contains
 values which order is same as a member of parameter C<"oids"> specifys.
 
     snmpget(
         hosts => \%hosts,
-        oids  => { someMIB1 => $oid1, someMIB2 => [ $oid2, $oid3, $oid4 ] },
+        oids  => { someMIB1 => $oid1,
+                   someMIB2 => [ $oid2, $oid3, $oid4 ]
+        },
         -mycallback => sub {
             ($session, $host, $key, $valref) = @_;
-            # When $valX is value of $oidX, $valref is;
+            # $valref will be;
             #   [ $val1 ]                   when $key is "someMIB1"
             # or 
             #   [ $val2, $val3, $val4 ]     when $key is "someMIB2"
@@ -414,10 +426,12 @@ as above, a member of parameter C<"oids"> specifys.
 
     snmpwalk(
         hosts => \%hosts,
-        oids  => { someMIB1 => $oid1, someMIB2 => [ $oid2, $oid3, $oid4 ] },
+        oids  => { someMIB1 => $oid1,
+                   someMIB2 => [ $oid2, $oid3, $oid4 ]
+        },
         -mycallback => sub {
             ($session, $host, $key, $valref) = @_;
-            # $valref is;
+            # $valref will be;
             #   [ [ $suboid1, $val1 ] ]             when $key is "someMIB1"
             # or 
             #   [ [ $suboid2,$val2 ], [ $suboid3,$val3 ], [ $suboid4,$val4 ] ]
@@ -463,8 +477,17 @@ sub _getmanager
     my $class = shift;
     my ($command, $session, $table, $error, $host, $key, $boids, $mycb) = @_;
 
+    # check OIDs are array and init storing value
+    my @baseoids = ();
     my $vbtype = ref($boids);
-    push my @baseoids, ($vbtype eq 'ARRAY')? @{$boids}: $boids;
+    if ( $vbtype eq 'ARRAY' ){
+        $table->{$host}{$key} = [];
+        push @baseoids, @{$boids};
+        push @{$table->{$host}{$key}}, map {}, @{$boids};
+    } else {
+        $table->{$host}{$key} = {};
+        push @baseoids, $boids;
+    }
 
     my $self = {
         command  => $command,   # get, get_next or get_bulk
@@ -624,6 +647,7 @@ sub _treat_getnext_varbindings
     if ( $self->{isMulOid} ){
         for ( my $i=0; $i<$num; $i++ ){
             next unless defined $ret[$i];
+            next unless @{$ret[$i]};
             my ($suboid, $val) = @{$ret[$i]};
             $self->{table}{$host}{$key}->[$i]{$suboid} = $val;
         }
@@ -724,7 +748,7 @@ sub _parse_params
     my %p = @_;
     my %sessions = ();
     my (%istmp,$oids,$mycb) = ();
-    my $paramhosts = 1;
+    my $arghosts = 1;
 
     my $nonblocking = 0;
     if ( defined $p{nonblocking} ){
@@ -849,7 +873,7 @@ sub _parse_params
         $snmphash = undef;
     }
     else {
-        $paramhosts = 0;
+        $arghosts = 0;
     }
 
     # --- parsing "snmp" ---
@@ -918,7 +942,7 @@ sub _parse_params
     }
 
     # --- parsing end ---
-    return (\%sessions,\%errhash,\%istmp,$oids,\%p,$mycb,$paramhosts);
+    return (\%sessions,\%errhash,\%istmp,$oids,\%p,$mycb,$arghosts);
 
 }
 
@@ -937,7 +961,7 @@ sub _snmpkick
     my $command = shift;
 
     _clear_error();
-    my ($sessions,$error,$istmp,$oids,$opts,$mycb,$paramhosts) = _parse_params(
+    my ($sessions,$error,$istmp,$oids,$opts,$mycb,$arghosts) = _parse_params(
         @_,
         nonblocking => 0
     );
@@ -946,18 +970,26 @@ sub _snmpkick
     my $table = {};
     while ( my ($host,$session) = each %{$sessions} )
     {
-        while ( my ($key, $oid) = each %{$oids} )
-        {
+        foreach my $key ( keys %{$oids} ){
+            my $oid = $oids->{$key};
+            # memo: dont use "while...(each %{$oids})" here.
+            #       because when $result is undef by error, not-resetted
+            #       iterating counter of %{$oids} will be used at next
+            #       $host's loop...
             my $manager = __PACKAGE__->_getmanager(
                 $command, $session, $table, $error, $host, $key, $oid, $mycb
             );
+            my $result;
             do {
-                my $result = $manager->_exec_operation(
+                $result = $manager->_exec_operation(
                     %{$opts},
                     -varbindlist => [ $manager->_get_oids() ],
                 );
                 unless ( defined $result ){
                     $manager->_memo_error();
+                    # if some error occuer, terminate process of
+                    # error host and delete data at Blocking Mode
+                    delete $table->{$host};
                     last;
                 }
             } while ( $manager->_treat_varbindings() );
@@ -968,7 +1000,7 @@ sub _snmpkick
     while ( my ($host,$session) = each %{$sessions} ){
         $session->close() if $istmp->{$host};
     }
-    return _retresults($table, $error, $paramhosts);
+    return _retresults($table, $error, $arghosts);
 }
 
 
@@ -1036,7 +1068,7 @@ sub snmpbulkwalk { snmpbulk(@_) }
 
 =head1 NON-BLOCKING FUNCTIONS
 
-C<Net::SNMP::Util> gives some NonBlocking functions. Use these NonBlocking
+C<Net::SNMP::Util> gives some Non-blocking functions. Use these Non-blocking
 functions, import them with ":para" tag at C<use> pragma.
 
 =cut
@@ -1047,7 +1079,7 @@ sub _snmpparakick
     my $command = shift;
 
     _clear_error();
-    my ($sessions,$error,$istmp,$oids,$opts,$mycb,$paramhosts) = _parse_params(
+    my ($sessions,$error,$istmp,$oids,$opts,$mycb,$arghosts) = _parse_params(
         @_,
         nonblocking => 1
     );
@@ -1097,7 +1129,7 @@ sub _snmpparakick
     while ( my ($host,$session) = each %{$sessions} ){
         $session->close() if $istmp->{$host};
     }
-    return _retresults($table, $error, $paramhosts);
+    return _retresults($table, $error, $arghosts);
 }
 
 
@@ -1105,7 +1137,7 @@ sub _snmpparakick
 
 =head2 snmpparaget()
 
-C<snmpparaget()> is a NonBlocking function which gather MIB values with SNMP
+C<snmpparaget()> is a Non-blocking function which gather MIB values with SNMP
 GetRequest operation via C<Net::SNMP-E<gt>get_request()>.
 
 =cut
@@ -1121,7 +1153,7 @@ sub snmpparaget
 
 =head2 snmpparawalk()
 
-C<snmpparawalk()> is a NonBlocking function which gather MIB values with SNMP
+C<snmpparawalk()> is a Non-blocking function which gather MIB values with SNMP
 GetNextRequest operation via C<Net::SNMP-E<gt>get_next_request()>.
 
 =cut
@@ -1137,7 +1169,7 @@ sub snmpparawalk
 
 =head2 snmpparabulk()
 
-C<snmpparabulk()> is a NonBlocking function which gather MIB values with SNMP
+C<snmpparabulk()> is a Non-blocking function which gather MIB values with SNMP
 GetBulkRequest operation via C<Net::SNMP-E<gt>get_bulk_request()>. So using
 this function needs that target devices are acceptable for SNMP version 2c or
 more.
@@ -1197,7 +1229,7 @@ sub get_errhash {
 }
 
 sub _retresults {
-    my ($table, $error, $paramhosts) = @_;
+    my ($table, $error, $arghosts) = @_;
 
     return unless defined wantarray;
 
@@ -1206,43 +1238,17 @@ sub _retresults {
 
         while ( my ($host,$keys) = each %{$table} )
         {
-            # drop empty or undefined MIB values
             while ( my ($key, $mibvals) = each %{$keys} )
             {
-                my $vtype  = ref($mibvals);
-                if ( $vtype eq 'ARRAY' ){
-                    $mibvals = undef unless @{$mibvals};
-                } elsif ( $vtype eq 'HASH' ){
-                    $mibvals = undef unless %{$mibvals};
-                }
-                unless ( defined $mibvals ){
-                    delete $table->{$host}{$key};
-                } else {
-                    if ( $key eq '_ANONY_' ){
-                        $table->{$host} = $mibvals;
-                        last;
-                    }
+                if ( $key eq '_ANONY_' ){
+                    $table->{$host} = $mibvals;
+                    last;
                 }
             }
-
-            # drop empty host data
-            my $vtype  = ref($table->{$host});
-            if ( $vtype eq 'ARRAY' ){
-                delete $table->{$host} unless @{$table->{$host}};
-            } elsif ( $vtype eq 'HASH' ){
-                delete $table->{$host} unless %{$table->{$host}};
-            }
         }
-
-        if ( !%{$table} ){
-            undef $table;
-            $error = 'Empty result' unless $error;
-        }
-        else {
-            if ( !$paramhosts ){
-                $table = $table->{(keys %{$table})[0]};
-            }
-        }
+        # No "hosts" option and specified target host by "snmp",
+        # the result will not contain hash of hosts.
+        $table = (values %{$table})[0] if !$arghosts;
     }
 
     my $message = '';
@@ -1254,7 +1260,7 @@ sub _retresults {
                 }
             }
             if ( %{$error} ){
-                $message = join(" / ", (values %{$error}));
+                $message = join("; ", (values %{$error}));
             }
         }
         else {
@@ -1270,7 +1276,7 @@ sub _retresults {
 
 # =============================================================================
 
-=head1 HINTS
+=head1 APPENDIX
 
 C<Net::SNMP::Util> has sub modules; C<Net::SNMP::Util::OID> and
 C<Net::SNMP::Util::TC>.
@@ -1282,9 +1288,9 @@ For example, you can specify basic OIDs when call function like below;
 
     %oids  = (
         sysInfo => [
-            oid("ifDescr","ifType") # '1.3.6.1.2.1.2.2.1.2','1.3.6.1.2.1.2.2.1.3'
+            oid( "ifDescr", "ifType" )  # equals '1.3.6.1.2.1.2.2.1.2','1.3.6.1.2.1.2.2.1.3'
         ],
-        oidm("ifName")              # "ifName" => "1.3.6.1.2.1.31.1.1.1.1"
+        oidm("ifName")                  # equals "ifName" => "1.3.6.1.2.1.31.1.1.1.1"
     );
     ($result,$error) = snmpparaawlk(
         hosts => \@hosts,
@@ -1618,12 +1624,24 @@ t.onodera, C<< <cpan :: garakuta.net> >>
 
 =head1 SEE ALSO
 
+=over
+
+=item *
+
 L<Net::SNMP> - Core module of C<Net::SNMP::Util> which brings us good SNMP
 implementations.
+
+=item *
+
 L<Net::SNMP::Util::OID> - Sub module of C<Net::SNMP::Util> which provides
 easy and simple functions to treat OID.
+
+=item *
+
 L<Net::SNMP::Util::TC> - Sub module of C<Net::SNMP::Util> which provides
 easy and simple functions to treat textual conversion.
+
+=back
 
 =head1 LICENSE AND COPYRIGHT
 
