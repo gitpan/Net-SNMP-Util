@@ -1,6 +1,6 @@
 --- #YAML:1.0
 name:               Net-SNMP-Util
-version:            1.00
+version:            1.02
 abstract:           Utility functions for Net::SNMP
 author:
     - t.onodera <ong :: garakuta.net>
@@ -28,10 +28,10 @@ meta-spec:
 provides:
   Net::SNMP::Util:
     file: lib/Net/SNMP/Util.pm
-    version: 1.00
+    version: 1.02
   Net::SNMP::Util::OID.pm:
     file: lib/Net/SNMP/Util/OID.pm
-    version: 1.00
+    version: 1.02
   Net::SNMP::Util::TC.pm:
     file: lib/Net/SNMP/Util/TC.pm
-    version: 1.00
+    version: 1.02

@@ -1,5 +1,9 @@
 Revision history for Net-SNMP-Util
 
+1.02    2011/02/10
+    [ Test ]
+    - Correct lack of calling done_testing() at subtest block.
+
 1.01    2011/01/21
     [ Common ]
     - Modified and corrected textes of POD. (English is too difficult...)

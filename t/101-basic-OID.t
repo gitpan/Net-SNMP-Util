@@ -24,6 +24,7 @@ subtest "check oid()" => sub {
 		"$oid_mgmt.1.2",
 		qq/oid("mgmt.1.2") = "$oid_mgmt.1.2"/
 	);
+	done_testing();
 };
 
 subtest "check oidt()" => sub {
@@ -39,6 +40,7 @@ subtest "check oidt()" => sub {
 		"",
 		qq/oidt("1.2.3.4.5.6") = ""/
 	);
+	done_testing();
 };
 
 subtest "check oidp()" => sub {
@@ -50,6 +52,7 @@ subtest "check oidp()" => sub {
 		"mgmt.1.2$oid_mgmt.1.2",
 		qq/oidp("mgmt.1.2") = ("mgmt.1.2","$oid_mgmt.1.2")/
 	);
+	done_testing();
 };
 
 
@@ -72,6 +75,7 @@ subtest "check oid_load()" => sub {
 			qq/oidt($testmib{"myMib$_"}) = "myMib$_"/
 		);
 	}
+	done_testing();
 };
 
 
