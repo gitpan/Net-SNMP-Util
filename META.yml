@@ -1,6 +1,6 @@
 --- #YAML:1.0
 name:               Net-SNMP-Util
-version:            1.02
+version:            1.03
 abstract:           Utility functions for Net::SNMP
 author:
     - t.onodera <ong :: garakuta.net>
