@@ -13,6 +13,7 @@ WriteMakefile(
         'Exporter'      => 0,
         'Carp'          => 0,
         'List::Util'    => 0,
+        'Scalar::Util'  => 0,
         'Net::SNMP'     => 0,
     },
 

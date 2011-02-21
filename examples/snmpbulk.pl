@@ -2,7 +2,7 @@
 # =============================================================================
 # snmpbulk.pl - Command to get MIB with SNMP GetBulkRequest via Net::SNMP::Util
 # -----------------------------------------------------------------------------
-$main::VERSION = '1.03';
+$main::VERSION = '1.04';
 # -----------------------------------------------------------------------------
 
 =head1 NAME
@@ -48,7 +48,7 @@ $Data::Dumper::Sortkeys = sub { [ sort {
 
 # ---------- Parsing options ----------
 my %opt;
-getopts('hPa:A:c:dD:E:m:n:p:r:t:u:v:x:X:f:', \%opt);
+getopts('hPa:A:c:dD:E:m:n:p:r:t:u:v:x:X:f:M:', \%opt);
 
 my ($hosts, @oids) = @ARGV;
 HELP_MESSAGE()                    if defined $opt{h};
@@ -59,7 +59,6 @@ my @hosts = split(/,/, $hosts);
 my %oids  = map {
     /,/? ($_ => [ map oid($_),split(/,/) ]): oidp($_)
 } @oids;
-
 
 # ---------- set session options ----------
 my %snmp = ();

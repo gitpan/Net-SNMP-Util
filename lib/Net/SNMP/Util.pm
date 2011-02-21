@@ -1,8 +1,14 @@
 # =============================================================================
 package Net::SNMP::Util;
 # -----------------------------------------------------------------------------
-$Net::SNMP::Util::VERSION = '1.03';
+$Net::SNMP::Util::VERSION = '1.04';
 # -----------------------------------------------------------------------------
+use strict;
+use warnings;
+
+use constant DEBUG => 0;
+do { require Data::Dumper; import Data::Dumper; } if DEBUG;
+
 
 =head1 NAME
 
@@ -444,14 +450,9 @@ as above, a member of parameter C<"oids"> specifys.
 
 # =============================================================================
 
-use strict;
-use warnings;
-
 use Carp qw();
+use Scalar::Util qw();
 use Net::SNMP;
-
-#use Data::Dumper;
-use constant DEBUG => 0;
 
 use base qw( Exporter );
 our (@EXPORT, @EXPORT_OK, %EXPORT_TAGS, $VERSION);
@@ -483,7 +484,6 @@ sub _getmanager
     if ( $vbtype eq 'ARRAY' ){
         $table->{$host}{$key} = [];
         push @baseoids, @{$boids};
-        push @{$table->{$host}{$key}}, map {}, @{$boids};
     } else {
         $table->{$host}{$key} = {};
         push @baseoids, $boids;
@@ -501,7 +501,7 @@ sub _getmanager
         mycb     => $mycb,      # my callback
         isMulOid => $vbtype     # given oid is plural or not
     };
-
+    Scalar::Util::weaken($self->{session}); # Avoid for circular references
     bless $self, $class;
 }
 
@@ -602,6 +602,9 @@ sub _treat_getnext_varbindings
 
     # get varBindList and names
     my $vlist = $session->var_bind_list();
+
+#   printf "[DEBUG] %s) vlist:%s\n", "get_next", Dumper($vlist) if DEBUG;
+
     return undef unless defined $vlist; # error
     return 0 unless %{$vlist};          # if result is empty
 
@@ -809,8 +812,9 @@ sub _parse_params
                 elsif ( $type eq 'HASH' ){
                     my ($s, $e) = Net::SNMP->session(
                         %{$snmphash},
-                        -nonblocking => $nonblocking
+                        -nonblocking => $nonblocking,
                         -hostname    => $host,
+                        %{$value}
                     );
                     unless ( defined($s) ){
                         $errhash{$host} = "$host, session making error: $e";
@@ -822,7 +826,23 @@ sub _parse_params
 
                 # othre cases cause error.
                 else {
-                    return (undef, qq(Value of $host must be a Net::SNMP object or hash reference));
+                    # othre reference without string will be an error
+                    if ( !$type && defined($value) ){
+                        my ($s, $e) = Net::SNMP->session(
+                            %{$snmphash},
+                            -nonblocking => $nonblocking,
+                            -hostname    => $value,
+                        );
+                        unless ( defined($s) ){
+                            $errhash{$host} = "$host, session making error: $e";
+                            next;
+                        }
+                        $sessions{$host} = $s;
+                        $istmp{$host}    = 1;
+                    } else {
+                        return (undef, qq(Value of "$host" must be a string,).
+                                       qq( an array reference or a hash reference));
+                    }
                 }
             }
         }
@@ -938,7 +958,10 @@ sub _parse_params
         }
     }
     foreach ( qw( callback -callback ) ){
-        delete $p{$_} if defined $p{$_};
+        if ( defined($p{$_}) ){
+            Carp::carp("option $_ is ignored.");
+            delete $p{$_};
+        }
     }
 
     # --- parsing end ---
@@ -971,6 +994,7 @@ sub _snmpkick
     while ( my ($host,$session) = each %{$sessions} )
     {
         foreach my $key ( keys %{$oids} ){
+
             my $oid = $oids->{$key};
             # memo: dont use "while...(each %{$oids})" here.
             #       because when $result is undef by error, not-resetted
@@ -979,6 +1003,7 @@ sub _snmpkick
             my $manager = __PACKAGE__->_getmanager(
                 $command, $session, $table, $error, $host, $key, $oid, $mycb
             );
+
             my $result;
             do {
                 $result = $manager->_exec_operation(
@@ -998,8 +1023,12 @@ sub _snmpkick
 
     # closing temporary session and finishing
     while ( my ($host,$session) = each %{$sessions} ){
-        $session->close() if $istmp->{$host};
+        if ( $istmp->{$host} ){
+            $session->close();
+            undef $session;
+        }
     }
+
     return _retresults($table, $error, $arghosts);
 }
 
@@ -1045,8 +1074,8 @@ GetBulkRequest operation via C<Net::SNMP-E<gt>get_bulk_request()>. So using
 this function needs that target devices are acceptable for SNMP version 2c or
 more.
 
-Note that specify option C<-maxrepetitions> with some value. C<Net::SNMP> set
-this parameter 0 by defalut.
+Note that C<-maxrepetitions> should be passed with some value. C<Net::SNMP>
+will set this parameter 0 by defalut.
 Also note that reason of algorithm, -nonrepeaters is not supported.
 
 =head2 snmpbulkwalk()
@@ -1127,8 +1156,12 @@ sub _snmpparakick
 
     # closing temporary session and finishing
     while ( my ($host,$session) = each %{$sessions} ){
-        $session->close() if $istmp->{$host};
+        if ( $istmp->{$host} ){
+            $session->close();
+            undef $session;
+        }
     }
+
     return _retresults($table, $error, $arghosts);
 }
 
@@ -1174,8 +1207,8 @@ GetBulkRequest operation via C<Net::SNMP-E<gt>get_bulk_request()>. So using
 this function needs that target devices are acceptable for SNMP version 2c or
 more.
 
-Note that specify option C<-maxrepetitions> with some value. C<Net::SNMP> set
-this parameter 0 by defalut.
+Note that C<-maxrepetitions> should be passwd with some value. C<Net::SNMP>
+will set this parameter 0 by defalut.
 Also note that reason of algorithm, -nonrepeaters is not supported.
 
 =head2 snmpparabulkwalk()
@@ -1234,13 +1267,14 @@ sub _retresults {
     return unless defined wantarray;
 
     my %ret = ();
-    if ( $table ){
-
+    if ( defined($table) && %{$table} )
+    {
         while ( my ($host,$keys) = each %{$table} )
         {
             while ( my ($key, $mibvals) = each %{$keys} )
             {
                 if ( $key eq '_ANONY_' ){
+
                     $table->{$host} = $mibvals;
                     last;
                 }

@@ -12,7 +12,12 @@ examples/tinymrtg.pl
 examples/snmpget.pl
 examples/snmpwalk.pl
 examples/snmpbulk.pl
-t/00-load.t
+t/000-load.t
+t/010-arg-bl.t
+t/011-arg-nb.t
+t/020-ret-get.t
+t/021-ret-next.t
+t/022-ret-bulk.t
 t/100-load-OID.t
 t/101-basic-OID.t
 t/102-import-OID.t
